@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('sql', [])
+angular.module('sql', ['reachability'])
   .factory('queryResultToObjects', function (_object) {
     return function queryResultToObjects(sqlQuery, headers) {
       return $.map(sqlQuery.rows, function(obj, idx){
@@ -18,7 +18,7 @@ angular.module('sql', [])
       return obj;
     };
   })
-  .factory('SQLQuery', function ($http, $location, $log, $q) {
+  .factory('SQLQuery', function ($http, $location, $log, $q, Reachability) {
     function SQLQuery(stmt, response, error) {
       this.stmt = stmt;
       this.rows = [];
@@ -86,11 +86,18 @@ angular.module('sql', [])
         canceler.reject();
       };
 
+      if (!Reachability.reachable()) {
+        var error = new Error('Connection refused');
+        error.status = 0;
+        deferred.reject(new SQLQuery(stmt, null, error));
+        return promise;
+      }
+
       var baseURI = $location.protocol() + "://" + $location.host() + ":" + $location.port();
       if (localStorage.getItem("crate.base_uri") != null) {
         baseURI = localStorage.getItem("crate.base_uri");
       }
-      $http.post(baseURI+"/_sql", data, {'timeout': canceler.promise}).
+      $http.post(baseURI + "/_sql", data, {'timeout': canceler.promise}).
         success(function(data, status, headers, config) {
           deferred.resolve(new SQLQuery(stmt, data, null));
         }).
